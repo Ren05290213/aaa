@@ -257,7 +257,8 @@ struct WidgetSnapshot: Codable, Equatable {
         return copy
     }
 
-    var caloriesRemaining: Int { max(0, calorieGoal - calories) }    var usesKilojoules: Bool { energyUnitRaw == "kj" }
+    var caloriesRemaining: Int { max(0, calorieGoal - calories) }
+    var usesKilojoules: Bool { energyUnitRaw == "kj" }
     /// Whole display units for a stored kcal amount (1 kcal = 4.184 kJ).
     func energyValue(_ kcal: Int) -> Int {
         usesKilojoules ? Int((Double(kcal) * 4.184).rounded()) : kcal
