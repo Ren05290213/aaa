@@ -1,0 +1,115 @@
+# Builds an unsigned .ipa on a GitHub-hosted macOS runner, so the app can be
+# signed on Windows with 爱思助手 (i4Tools) and installed without a Mac.
+#
+#   Actions → "Build unsigned IPA" → Run workflow
+#   → download the `FudAI-unsigned-ipa` artifact → unzip → hand the .ipa to 爱思助手
+#
+# The archive is built with CODE_SIGNING_ALLOWED=NO: no Apple ID, no
+# certificates, no secrets in this repository. All signing happens on the
+# Windows side.
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [sideload]
+  pull_request:
+    paths:
+      - '.github/workflows/build-unsigned-ipa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: List the installed Xcode versions
+        run: ls -1 /Applications | grep -i '^Xcode' || true
+
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          latest="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          echo "Using $latest"
+          sudo xcode-select -s "$latest"
+
+      - name: Check the toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          major="$(xcodebuild -version | awk '/^Xcode /{split($2,v,"."); print v[1]}')"
+          if [ "$major" -lt 27 ]; then
+            echo "::error::Fud AI needs Xcode 27 or newer (it uses the iOS 27 FoundationModels image APIs). This runner has Xcode $major."
+            echo "::error::Use a runner image that ships Xcode 27, or build on a Mac with Xcode 27."
+            exit 1
+          fi
+
+      - name: Ensure the Metal shader toolchain is installed
+        run: |
+          if [ -f scripts/ci/ensure_metal_toolchain.sh ]; then
+            bash scripts/ci/ensure_metal_toolchain.sh
+          else
+            echo "No Metal toolchain helper; using the default toolchain."
+          fi
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -project ios/calorietracker.xcodeproj \
+            -scheme calorietracker \
+            -resolvePackageDependencies
+
+      - name: Archive (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project ios/calorietracker.xcodeproj \
+            -scheme calorietracker \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/FudAI.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            WORKOUT_VECTORS=none
+
+      - name: Package the IPA
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/FudAI.xcarchive/Products/Applications/calorietracker.app"
+          test -d "$APP" || { echo "::error::No calorietracker.app in the archive"; ls -R "$RUNNER_TEMP/FudAI.xcarchive/Products" ; exit 1; }
+          rm -rf "$RUNNER_TEMP/ipa"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          ditto "$APP" "$RUNNER_TEMP/ipa/Payload/calorietracker.app"
+          cd "$RUNNER_TEMP/ipa"
+          ditto -c -k --sequesterRsrc --keepParent Payload "$RUNNER_TEMP/FudAI-unsigned.ipa"
+          unzip -l "$RUNNER_TEMP/FudAI-unsigned.ipa" | head -20
+
+      - name: Upload the IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: FudAI-unsigned-ipa
+          path: ${{ runner.temp }}/FudAI-unsigned.ipa
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Keep the build log when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            ${{ runner.temp }}/DerivedData/Logs/Build
+          if-no-files-found: ignore
+          retention-days: 7
