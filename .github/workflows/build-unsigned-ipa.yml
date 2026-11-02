@@ -66,15 +66,14 @@ jobs:
             -scheme calorietracker \
             -resolvePackageDependencies
 
-      - name: Archive (unsigned)
+      - name: Build (unsigned)
         run: |
-          set -euo pipefail
-          xcodebuild archive \
+          set -o pipefail
+          xcodebuild build \
             -project ios/calorietracker.xcodeproj \
             -scheme calorietracker \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/FudAI.xcarchive" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -82,13 +81,30 @@ jobs:
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             OTHER_SWIFT_FLAGS="-DFUDAI_NO_IOS27" \
-            WORKOUT_VECTORS=none
+            WORKOUT_VECTORS=none \
+            2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # xcodebuild's failure message scrolls away in a 20k-line log; surface it.
+      - name: Show the build errors
+        if: failure()
+        run: |
+          echo "=== error lines ==="
+          grep -nE "error:|fatal error:|BUILD FAILED|Command .* failed|failed with exit code" "$RUNNER_TEMP/build.log" | head -60 || echo "(no error: lines found)"
+          echo
+          echo "=== last 40 lines ==="
+          tail -40 "$RUNNER_TEMP/build.log"
 
       - name: Package the IPA
         run: |
           set -euo pipefail
-          APP="$RUNNER_TEMP/FudAI.xcarchive/Products/Applications/calorietracker.app"
-          test -d "$APP" || { echo "::error::No calorietracker.app in the archive"; ls -R "$RUNNER_TEMP/FudAI.xcarchive/Products" ; exit 1; }
+          PRODUCTS="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos"
+          APP="$PRODUCTS/calorietracker.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::No calorietracker.app in $PRODUCTS"
+            ls -la "$RUNNER_TEMP/DerivedData/Build/Products" || true
+            ls -la "$PRODUCTS" || true
+            exit 1
+          fi
           rm -rf "$RUNNER_TEMP/ipa"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           ditto "$APP" "$RUNNER_TEMP/ipa/Payload/calorietracker.app"
@@ -110,6 +126,6 @@ jobs:
         with:
           name: build-log
           path: |
-            ${{ runner.temp }}/DerivedData/Logs/Build
+            ${{ runner.temp }}/build.log
           if-no-files-found: ignore
           retention-days: 7
