@@ -67,6 +67,11 @@ struct OnDeviceAIService {
         guard !images.isEmpty else {
             return try await respond(to: prompt, instructions: instructions)
         }
+        #if FUDAI_NO_IOS27
+        // Built with the iOS 26 SDK (no Xcode 27 available): the image
+        // `Attachment` API this uses only exists in the iOS 27 SDK.
+        throw OnDeviceAIError.unavailable("On-device photo analysis needs a build made with Xcode 27.")
+        #else
         let session = LanguageModelSession(instructions: instructions)
         let response = try await session.respond {
             prompt
@@ -83,6 +88,7 @@ struct OnDeviceAIService {
             }
         }
         return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        #endif
     }
 
     @available(iOS 27.0, *)
@@ -263,6 +269,10 @@ struct OnDeviceFoodService {
         labelText: String?,
         portionScaleSection: String?
     ) async throws -> GeminiService.FoodAnalysis {
+        #if FUDAI_NO_IOS27
+        // Built with the iOS 26 SDK: `Attachment` image attachments are iOS 27 only.
+        throw OnDeviceAIError.unavailable("On-device food photo analysis needs a build made with Xcode 27.")
+        #else
         let progressiveInstructions: String
         if progressiveMeal {
             progressiveInstructions = """
@@ -312,6 +322,7 @@ struct OnDeviceFoodService {
         }
 
         return buildFoodAnalysis(from: response.content)
+        #endif
     }
 
     // MARK: - Build FoodAnalysis from structured result

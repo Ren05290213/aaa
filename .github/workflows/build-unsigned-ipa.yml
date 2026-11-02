@@ -48,9 +48,8 @@ jobs:
           xcodebuild -version
           major="$(xcodebuild -version | awk '/^Xcode /{split($2,v,"."); print v[1]}')"
           if [ "$major" -lt 27 ]; then
-            echo "::error::Fud AI needs Xcode 27 or newer (it uses the iOS 27 FoundationModels image APIs). This runner has Xcode $major."
-            echo "::error::Use a runner image that ships Xcode 27, or build on a Mac with Xcode 27."
-            exit 1
+            echo "::warning::Upstream Fud AI wants Xcode 27 (iOS 27 FoundationModels image APIs). This runner has Xcode $major; the iOS 27-only on-device image analysis is compiled out below via FUDAI_NO_IOS27."
+            echo "FUDAI_NO_IOS27=1" >> "$GITHUB_ENV"
           fi
 
       - name: Ensure the Metal shader toolchain is installed
@@ -82,6 +81,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
+            OTHER_SWIFT_FLAGS="-DFUDAI_NO_IOS27" \
             WORKOUT_VECTORS=none
 
       - name: Package the IPA

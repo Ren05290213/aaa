@@ -240,6 +240,10 @@ struct ChatService {
             You cannot call data tools in this mode. Answer only from the profile, forecast, and data summary above. If the question requires unavailable detailed history, say that briefly instead of inventing facts.
             """
             if let imageData {
+                #if FUDAI_NO_IOS27
+                // Built with the iOS 26 SDK: image `Attachment`s are iOS 27 only.
+                throw ChatError.apiError("Apple Intelligence photo messages need a build made with Xcode 27.")
+                #else
                 if #available(iOS 27.0, *) {
                     guard let image = UIImage(data: imageData) else {
                         throw ChatError.apiError("Could not read the attached photo.")
@@ -258,6 +262,7 @@ struct ChatService {
                     return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
                 throw ChatError.apiError("Apple Intelligence photo messages require iOS 27 or later.")
+                #endif
             }
             return try await OnDeviceAIService.respond(
                 to: prompt,
