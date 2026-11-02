@@ -81,6 +81,8 @@ jobs:
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             OTHER_SWIFT_FLAGS="-DFUDAI_NO_IOS27" \
+            SWIFT_VERSION=5.0 \
+            SWIFT_STRICT_CONCURRENCY=minimal \
             WORKOUT_VECTORS=none \
             2>&1 | tee "$RUNNER_TEMP/build.log"
 
