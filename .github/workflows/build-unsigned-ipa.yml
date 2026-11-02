@@ -94,6 +94,19 @@ jobs:
           echo "=== last 40 lines ==="
           tail -40 "$RUNNER_TEMP/build.log"
 
+          # Also surface the errors in the job summary, which stays readable
+          # without expanding the log.
+          {
+            echo "## Build errors"
+            echo '```'
+            grep -nE "error:|fatal error:|BUILD FAILED|Command .* failed" "$RUNNER_TEMP/build.log" | head -40 || echo "(no error lines)"
+            echo '```'
+            echo "## Last 25 log lines"
+            echo '```'
+            tail -25 "$RUNNER_TEMP/build.log"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Package the IPA
         run: |
           set -euo pipefail
