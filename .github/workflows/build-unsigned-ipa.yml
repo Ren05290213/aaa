@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: List the installed Xcode versions
         run: ls -1 /Applications | grep -i '^Xcode' || true
@@ -128,7 +128,7 @@ jobs:
           unzip -l "$RUNNER_TEMP/FudAI-unsigned.ipa" | head -20
 
       - name: Upload the IPA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FudAI-unsigned-ipa
           path: ${{ runner.temp }}/FudAI-unsigned.ipa
@@ -137,7 +137,7 @@ jobs:
 
       - name: Keep the build log when it fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-log
           path: |
